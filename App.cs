@@ -8,7 +8,17 @@ public sealed class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        try
+        {
+            StartupDiagnostics.Log("App.OnLaunched");
+            _window = new MainWindow();
+            _window.Activate();
+            StartupDiagnostics.Log("Main window activated");
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnostics.LogException("OnLaunched failure", ex);
+            throw;
+        }
     }
 }
