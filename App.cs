@@ -2,14 +2,9 @@ using Microsoft.UI.Xaml;
 
 namespace AppSweep;
 
-public partial class App : Application
+public sealed class App : Application
 {
     private Window? _window;
-
-    public App()
-    {
-        InitializeComponent();
-    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
