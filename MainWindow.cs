@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -24,6 +23,7 @@ public sealed class MainWindow : Window
     private readonly Button _forceRemoveButton;
     private readonly TextBlock _statusText;
     private readonly TextBox _logTextBox;
+    private readonly Dictionary<string, CheckBox> _selectionBoxes = new(StringComparer.OrdinalIgnoreCase);
 
     public ObservableCollection<InstalledProduct> AllProducts { get; } = new();
     public ObservableCollection<InstalledProduct> FilteredProducts { get; } = new();
@@ -64,9 +64,7 @@ public sealed class MainWindow : Window
         _productsListView = new ListView
         {
             SelectionMode = ListViewSelectionMode.None,
-            IsItemClickEnabled = false,
-            ItemsSource = FilteredProducts,
-            ItemTemplate = BuildProductTemplate()
+            IsItemClickEnabled = false
         };
 
         _uninstallButton = new Button
@@ -188,32 +186,6 @@ public sealed class MainWindow : Window
         return root;
     }
 
-    private DataTemplate BuildProductTemplate()
-    {
-        const string templateXaml = """
-<DataTemplate xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\">
-  <Border Padding=\"6,6,6,6\" BorderBrush=\"{ThemeResource SystemControlForegroundBaseLowBrush}\" BorderThickness=\"0,0,0,1\">
-    <Grid ColumnSpacing=\"12\">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width=\"Auto\" />
-        <ColumnDefinition Width=\"2*\" />
-        <ColumnDefinition Width=\"3*\" />
-        <ColumnDefinition Width=\"1.2*\" />
-        <ColumnDefinition Width=\"1.2*\" />
-      </Grid.ColumnDefinitions>
-      <CheckBox IsChecked=\"{Binding IsSelected, Mode=TwoWay}\" VerticalAlignment=\"Center\" />
-      <TextBlock Grid.Column=\"1\" Text=\"{Binding ProductCode}\" TextTrimming=\"CharacterEllipsis\" />
-      <TextBlock Grid.Column=\"2\" Text=\"{Binding Name}\" TextTrimming=\"CharacterEllipsis\" />
-      <TextBlock Grid.Column=\"3\" Text=\"{Binding Version}\" TextTrimming=\"CharacterEllipsis\" />
-      <TextBlock Grid.Column=\"4\" Text=\"{Binding InstallDate}\" TextTrimming=\"CharacterEllipsis\" />
-    </Grid>
-  </Border>
-</DataTemplate>
-""";
-
-        return (DataTemplate)XamlReader.Load(templateXaml);
-    }
-
     private async void RootGrid_Loaded(object sender, RoutedEventArgs e)
     {
         await RefreshProductsAsync();
@@ -281,6 +253,7 @@ public sealed class MainWindow : Window
             }
 
             AllProducts.Clear();
+            _selectionBoxes.Clear();
             foreach (var product in products)
             {
                 product.PropertyChanged += Product_PropertyChanged;
@@ -366,9 +339,11 @@ public sealed class MainWindow : Window
                 product.InstallDate.Contains(term, StringComparison.OrdinalIgnoreCase)));
 
         FilteredProducts.Clear();
+        _productsListView.Items.Clear();
         foreach (var product in matches)
         {
             FilteredProducts.Add(product);
+            _productsListView.Items.Add(BuildProductRow(product));
         }
 
         _countText.Text = $"{FilteredProducts.Count} shown / {AllProducts.Count} total";
@@ -376,10 +351,63 @@ public sealed class MainWindow : Window
         UpdateActionState();
     }
 
+    private UIElement BuildProductRow(InstalledProduct product)
+    {
+        var checkBox = new CheckBox
+        {
+            IsChecked = product.IsSelected,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0)
+        };
+
+        checkBox.Checked += (_, _) => product.IsSelected = true;
+        checkBox.Unchecked += (_, _) => product.IsSelected = false;
+        _selectionBoxes[product.ProductCode] = checkBox;
+
+        var row = new Grid
+        {
+            Padding = new Thickness(6, 6, 6, 6),
+            ColumnSpacing = 12,
+            BorderBrush = Application.Current.Resources["SystemControlForegroundBaseLowBrush"] as Brush,
+            BorderThickness = new Thickness(0, 0, 0, 1)
+        };
+
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+
+        row.Children.Add(checkBox);
+
+        var productCodeText = new TextBlock { Text = product.ProductCode, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(productCodeText, 1);
+        row.Children.Add(productCodeText);
+
+        var nameText = new TextBlock { Text = product.Name, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(nameText, 2);
+        row.Children.Add(nameText);
+
+        var versionText = new TextBlock { Text = product.Version, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(versionText, 3);
+        row.Children.Add(versionText);
+
+        var installDateText = new TextBlock { Text = product.InstallDate, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(installDateText, 4);
+        row.Children.Add(installDateText);
+
+        return new Border { Child = row };
+    }
+
     private void Product_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(InstalledProduct.IsSelected))
         {
+            if (sender is InstalledProduct product && _selectionBoxes.TryGetValue(product.ProductCode, out var checkBox))
+            {
+                checkBox.IsChecked = product.IsSelected;
+            }
+
             UpdateActionState();
         }
     }
