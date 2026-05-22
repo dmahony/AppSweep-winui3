@@ -94,10 +94,7 @@ public sealed class MainWindow : Window
         {
             AcceptsReturn = true,
             IsReadOnly = true,
-            IsTextSelectionEnabled = true,
             TextWrapping = TextWrapping.Wrap,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas")
         };
 
@@ -153,9 +150,9 @@ public sealed class MainWindow : Window
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
 
-        headerRow.Children.Add(new TextBlock { Width = 32 });
-        headerRow.Children.Add(new TextBlock { Text = "Product Code", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 0) });
-        Grid.SetColumn(headerRow.Children[^1], 1);
+        var productCodeHeader = new TextBlock { Text = "Product Code", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        Grid.SetColumn(productCodeHeader, 1);
+        headerRow.Children.Add(productCodeHeader);
         var nameHeader = new TextBlock { Text = "Name", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         Grid.SetColumn(nameHeader, 2);
         headerRow.Children.Add(nameHeader);
