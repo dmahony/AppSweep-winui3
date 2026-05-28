@@ -82,7 +82,7 @@ public sealed class MainWindow : Window
         _countText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", Brushes.Gray),
+            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", new SolidColorBrush(Microsoft.UI.Colors.Gray)),
             Text = string.Empty
         };
 
@@ -95,7 +95,7 @@ public sealed class MainWindow : Window
         _statusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", Brushes.Gray),
+            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", new SolidColorBrush(Microsoft.UI.Colors.Gray)),
             Margin = new Thickness(8, 0, 0, 0)
         };
 
@@ -423,7 +423,7 @@ public sealed class MainWindow : Window
         var border = new Border
         {
             Child = rowGrid,
-            BorderBrush = GetThemeBrush("SystemControlForegroundBaseLowBrush", Brushes.LightGray),
+            BorderBrush = GetThemeBrush("SystemControlForegroundBaseLowBrush", new SolidColorBrush(Microsoft.UI.Colors.LightGray)),
             BorderThickness = new Thickness(0, 0, 0, 1)
         };
         ToolTipService.SetToolTip(border, $"Scope: {product.RegistryScope}\nInstall source: {product.InstallSource}\nCached package: {product.LocalPackage}");
