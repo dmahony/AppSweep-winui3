@@ -82,7 +82,7 @@ public sealed class MainWindow : Window
         _countText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Application.Current.Resources["SystemControlForegroundBaseMediumBrush"] as Brush,
+            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", Brushes.Gray),
             Text = string.Empty
         };
 
@@ -95,7 +95,7 @@ public sealed class MainWindow : Window
         _statusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = Application.Current.Resources["SystemControlForegroundBaseMediumBrush"] as Brush,
+            Foreground = GetThemeBrush("SystemControlForegroundBaseMediumBrush", Brushes.Gray),
             Margin = new Thickness(8, 0, 0, 0)
         };
 
@@ -423,7 +423,7 @@ public sealed class MainWindow : Window
         var border = new Border
         {
             Child = rowGrid,
-            BorderBrush = Application.Current.Resources["SystemControlForegroundBaseLowBrush"] as Brush,
+            BorderBrush = GetThemeBrush("SystemControlForegroundBaseLowBrush", Brushes.LightGray),
             BorderThickness = new Thickness(0, 0, 0, 1)
         };
         ToolTipService.SetToolTip(border, $"Scope: {product.RegistryScope}\nInstall source: {product.InstallSource}\nCached package: {product.LocalPackage}");
@@ -520,5 +520,12 @@ public sealed class MainWindow : Window
         };
 
         await dialog.ShowAsync();
+    }
+
+    private static Brush GetThemeBrush(string resourceKey, Brush fallback)
+    {
+        return Application.Current?.Resources.TryGetValue(resourceKey, out var value) == true && value is Brush brush
+            ? brush
+            : fallback;
     }
 }
