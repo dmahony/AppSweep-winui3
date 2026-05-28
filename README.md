@@ -20,6 +20,13 @@ A Windows desktop app for removing MSI-based applications when the original inst
 
 This project targets Windows and uses WPF on .NET 8.
 
+Because the project now builds as a console subsystem executable, you can launch it from `cmd.exe` or PowerShell directly after publishing, for example:
+
+```powershell
+dotnet publish AppSweep.csproj -c Release -r win-x64 --self-contained true
+.\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\AppSweep.exe
+```
+
 Typical build command on Windows:
 
 ```powershell
