@@ -56,7 +56,7 @@ public sealed class InstalledProductService
                             var installSource = subKey.GetValue("InstallSource")?.ToString()?.Trim() ?? string.Empty;
                             var localPackage = subKey.GetValue("LocalPackage")?.ToString()?.Trim() ?? string.Empty;
                             var sourceStatus = DetermineSourceStatus(localPackage, installSource);
-                            var registryScope = $"{hive}\{view}";
+                            var registryScope = $"{hive}\\{view}";
 
                             products[productCode] = new InstalledProduct
                             {
@@ -237,13 +237,13 @@ public sealed class InstalledProductService
                         if (TryDeleteSubKey(uninstallRoot, product.ProductCode))
                         {
                             removedAny = true;
-                            log($"Removed registry entry: {hive}\{view}\{rootPath}\{product.ProductCode}");
+                            log($"Removed registry entry: {hive}\\{view}\\{rootPath}\\{product.ProductCode}");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    log($"Registry cleanup failed for {hive}\{view}: {ex.Message}");
+                    log($"Registry cleanup failed for {hive}\\{view}: {ex.Message}");
                 }
             }
         }
