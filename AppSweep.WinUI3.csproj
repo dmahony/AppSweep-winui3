@@ -5,6 +5,9 @@
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <RootNamespace>AppSweep</RootNamespace>
     <UseWinUI>true</UseWinUI>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <EnableCoreMrtTooling Condition="'$(OS)' != 'Windows_NT'">false</EnableCoreMrtTooling>
+    <ExpandPriResources Condition="'$(OS)' != 'Windows_NT'">false</ExpandPriResources>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
