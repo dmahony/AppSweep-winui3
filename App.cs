@@ -32,7 +32,12 @@ public partial class App : Application
         catch (Exception ex)
         {
             StartupDiagnostics.LogException("App startup failure", ex);
-            throw;
+            MessageBox.Show(
+                $"AppSweep failed to start.\n\n{ex}",
+                "AppSweep startup error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(-1);
         }
     }
 }

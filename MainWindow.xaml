@@ -90,19 +90,11 @@
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="3*" IsReadOnly="True" />
                 <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="1.2*" IsReadOnly="True" />
                 <DataGridTextColumn Header="Install Date" Binding="{Binding InstallDate}" Width="1.2*" IsReadOnly="True" />
-                <DataGridTextColumn Header="Source Status" Binding="{Binding SourceStatus}" Width="1.5*" IsReadOnly="True">
-                    <DataGridTextColumn.CellStyle>
-                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SourceStatus}" Value="Source missing">
-                                    <Setter Property="Background" Value="{DynamicResource AppDangerBrush}" />
-                                    <Setter Property="Foreground" Value="{DynamicResource AppDangerTextBrush}" />
-                                    <Setter Property="FontWeight" Value="SemiBold" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </DataGridTextColumn.CellStyle>
-                </DataGridTextColumn>
+                <DataGridTextColumn Header="Source Status"
+                                    Binding="{Binding SourceStatus}"
+                                    Width="1.5*"
+                                    IsReadOnly="True"
+                                    CellStyle="{DynamicResource DangerDataGridCellStyle}" />
             </DataGrid.Columns>
         </DataGrid>
 

@@ -109,6 +109,17 @@
         <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
     </Style>
 
+    <Style x:Key="DangerDataGridCellStyle" TargetType="{x:Type DataGridCell}">
+        <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding SourceStatus}" Value="Source missing">
+                <Setter Property="Background" Value="{DynamicResource AppDangerBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource AppDangerTextBrush}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <Style TargetType="{x:Type TextBox}" x:Key="LogTextBoxStyle">
         <Setter Property="Background" Value="{DynamicResource AppLogBackgroundBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource AppLogForegroundBrush}" />
