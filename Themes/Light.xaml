@@ -10,6 +10,8 @@
     <Color x:Key="AppAccentHoverColor">#FF1D4ED8</Color>
     <Color x:Key="AppSelectionColor">#FFDBEAFE</Color>
     <Color x:Key="AppSelectionTextColor">#FF111827</Color>
+    <Color x:Key="AppDangerColor">#FFFEE2E2</Color>
+    <Color x:Key="AppDangerTextColor">#FF991B1B</Color>
     <Color x:Key="AppLogBackgroundColor">#FFF8FAFC</Color>
     <Color x:Key="AppLogForegroundColor">#FF0F172A</Color>
 
@@ -23,6 +25,8 @@
     <SolidColorBrush x:Key="AppAccentHoverBrush" Color="{StaticResource AppAccentHoverColor}" />
     <SolidColorBrush x:Key="AppSelectionBrush" Color="{StaticResource AppSelectionColor}" />
     <SolidColorBrush x:Key="AppSelectionTextBrush" Color="{StaticResource AppSelectionTextColor}" />
+    <SolidColorBrush x:Key="AppDangerBrush" Color="{StaticResource AppDangerColor}" />
+    <SolidColorBrush x:Key="AppDangerTextBrush" Color="{StaticResource AppDangerTextColor}" />
     <SolidColorBrush x:Key="AppLogBackgroundBrush" Color="{StaticResource AppLogBackgroundColor}" />
     <SolidColorBrush x:Key="AppLogForegroundBrush" Color="{StaticResource AppLogForegroundColor}" />
 
