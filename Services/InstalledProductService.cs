@@ -10,6 +10,7 @@ public sealed class InstalledProductService
 {
     private static readonly Regex GuidRegex = new(@"^\{[0-9A-Fa-f-]+\}$", RegexOptions.Compiled);
     private static readonly Regex GuidInTextRegex = new(@"\{[0-9A-Fa-f-]+\}", RegexOptions.Compiled);
+    private static readonly Regex WindowsOperatingSystemNameRegex = new(@"(^|\b)(microsoft\s+)?windows\s+operating\s+system(\b|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly string[] UninstallRoots =
     {
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
@@ -49,7 +50,7 @@ public sealed class InstalledProductService
                             var isInstallerEntry = ReadRegistryInt(subKey, "WindowsInstaller") == 1 ||
                                                    uninstallString.Contains("msiexec", StringComparison.OrdinalIgnoreCase);
 
-                            if (!isInstallerEntry || string.IsNullOrWhiteSpace(productCode) || string.IsNullOrWhiteSpace(displayName))
+                            if (!isInstallerEntry || string.IsNullOrWhiteSpace(productCode) || string.IsNullOrWhiteSpace(displayName) || IsWindowsOperatingSystemProduct(displayName))
                             {
                                 continue;
                             }
@@ -281,6 +282,13 @@ public sealed class InstalledProductService
 
         var match = GuidInTextRegex.Match(uninstallString ?? string.Empty);
         return match.Success ? match.Value : "(Unknown)";
+    }
+
+    private static bool IsWindowsOperatingSystemProduct(string displayName)
+    {
+        return WindowsOperatingSystemNameRegex.IsMatch(displayName)
+               || (displayName.Contains("Microsoft Windows", StringComparison.OrdinalIgnoreCase)
+                   && displayName.Contains("Operating System", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string FormatInstallDate(string? installDate)
