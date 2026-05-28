@@ -11,6 +11,7 @@ public partial class MainWindow : Window
 {
     private readonly InstalledProductService _service = new();
     private bool _isLoading;
+    private bool _isThemeSyncing;
 
     public ObservableCollection<InstalledProduct> AllProducts { get; } = new();
     public ObservableCollection<InstalledProduct> FilteredProducts { get; } = new();
@@ -26,10 +27,16 @@ public partial class MainWindow : Window
         DeselectAllButton.Click += DeselectAllButton_Click;
         RunButton.Click += RunButton_Click;
         CleanupButton.Click += CleanupButton_Click;
+        ThemeCheckBox.Checked += ThemeCheckBox_Checked;
+        ThemeCheckBox.Unchecked += ThemeCheckBox_Unchecked;
         Loaded += MainWindow_Loaded;
 
         MethodComboBox.SelectedIndex = 0;
         ProductsGrid.ItemsSource = FilteredProducts;
+
+        _isThemeSyncing = true;
+        ThemeCheckBox.IsChecked = ThemeService.CurrentTheme == AppTheme.Dark;
+        _isThemeSyncing = false;
 
         SetStatus("Ready");
         UpdateCounts();
@@ -79,6 +86,26 @@ public partial class MainWindow : Window
     private async void CleanupButton_Click(object sender, RoutedEventArgs e)
     {
         await ProcessSelectedAsync(RemovalMethod.OrphanedRegistryCleanup);
+    }
+
+    private void ThemeCheckBox_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_isThemeSyncing)
+        {
+            return;
+        }
+
+        ThemeService.Apply(AppTheme.Dark);
+    }
+
+    private void ThemeCheckBox_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (_isThemeSyncing)
+        {
+            return;
+        }
+
+        ThemeService.Apply(AppTheme.Light);
     }
 
     private async Task RefreshProductsAsync()

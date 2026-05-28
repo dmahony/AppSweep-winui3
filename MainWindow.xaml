@@ -5,10 +5,11 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="AppSweep"
+        Icon="Assets/app.ico"
         Width="1400"
         Height="900"
         WindowStartupLocation="CenterScreen">
-    <Grid Margin="16">
+    <Grid Margin="16" Background="{DynamicResource AppBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -21,6 +22,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -46,6 +48,12 @@
             <Button x:Name="SelectAllButton" Grid.Column="4" Content="Select All" Margin="0,0,8,0" />
             <Button x:Name="DeselectAllButton" Grid.Column="5" Content="Deselect All" Margin="0,0,8,0" />
             <ProgressBar x:Name="LoadingBar" Grid.Column="6" Width="160" Height="18" IsIndeterminate="True" Visibility="Collapsed" VerticalAlignment="Center" />
+            <CheckBox x:Name="ThemeCheckBox"
+                      Grid.Column="7"
+                      Content="Dark mode"
+                      ToolTip="Switch between light and dark mode"
+                      VerticalAlignment="Center"
+                      Margin="12,0,0,0" />
         </Grid>
 
         <Grid Grid.Row="1" Margin="0,0,0,12">
@@ -99,7 +107,8 @@
                      TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto"
                      HorizontalScrollBarVisibility="Disabled"
-                     FontFamily="Consolas" />
+                     FontFamily="Consolas"
+                     Style="{DynamicResource LogTextBoxStyle}" />
         </DockPanel>
     </Grid>
 </Window>
