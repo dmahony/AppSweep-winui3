@@ -19,16 +19,16 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Restore
-        run: dotnet restore AppSweep.WinUI3.csproj
+        run: dotnet restore AppSweep.csproj
 
       - name: Build
-        run: dotnet build AppSweep.WinUI3.csproj -c Release --no-restore
+        run: dotnet build AppSweep.csproj -c Release --no-restore
 
       - name: Publish
-        run: dotnet publish AppSweep.WinUI3.csproj -c Release -r win-x64 -o artifacts/publish --self-contained true --no-restore
+        run: dotnet publish AppSweep.csproj -c Release -r win-x64 -o artifacts/publish --self-contained true --no-restore
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AppSweep-wpf
+          name: AppSweep
           path: artifacts/publish
