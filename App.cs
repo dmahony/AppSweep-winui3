@@ -1,25 +1,37 @@
-using Microsoft.UI.Xaml;
+using System.Windows;
 
 namespace AppSweep;
 
-public sealed class App : Application
+public partial class App : Application
 {
-    private Window? _window;
+    private MainWindow? _window;
 
-    protected override void OnLaunched(LaunchActivatedEventArgs args)
+    public App()
+    {
+        InitializeComponent();
+        DispatcherUnhandledException += (_, e) =>
+        {
+            StartupDiagnostics.LogException("Application.DispatcherUnhandledException", e.Exception);
+            e.Handled = true;
+        };
+    }
+
+    private void App_Startup(object sender, StartupEventArgs e)
     {
         try
         {
-            StartupDiagnostics.Log("App.OnLaunched");
-            StartupDiagnostics.Log("Creating main window");
+            StartupDiagnostics.HookGlobalHandlers();
+            StartupDiagnostics.Log("App startup");
+            StartupDiagnostics.Log("Creating main window...");
             _window = new MainWindow();
-            StartupDiagnostics.Log("Main window constructed");
-            _window.Activate();
-            StartupDiagnostics.Log("Main window activated");
+            MainWindow = _window;
+            StartupDiagnostics.Log("Showing main window...");
+            _window.Show();
+            StartupDiagnostics.Log("Main window shown");
         }
         catch (Exception ex)
         {
-            StartupDiagnostics.LogException("OnLaunched failure", ex);
+            StartupDiagnostics.LogException("App startup failure", ex);
             throw;
         }
     }

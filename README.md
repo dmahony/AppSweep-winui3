@@ -1,4 +1,4 @@
-# AppSweep WinUI 3
+# AppSweep WPF
 
 A Windows desktop app for removing MSI-based applications when the original installer source is missing.
 
@@ -14,10 +14,11 @@ A Windows desktop app for removing MSI-based applications when the original inst
   - Orphaned uninstall-entry cleanup
   - Auto mode that tries the safe uninstall paths first
 - Writes activity into an in-app log
+- Runs as a standard WPF desktop app, without the WinUI runtime
 
 ## Build
 
-This project targets Windows and requires .NET 8 + WinUI 3 / Windows App SDK.
+This project targets Windows and uses WPF on .NET 8.
 
 Typical build command on Windows:
 
@@ -26,8 +27,13 @@ dotnet restore AppSweep.WinUI3.csproj
 dotnet build AppSweep.WinUI3.csproj -c Release
 ```
 
+You can also build it on the current Linux environment with Windows targeting enabled:
+
+```bash
+dotnet build AppSweep.WinUI3.csproj -c Release
+```
+
 ## Notes
 
-- The app requests administrator privileges at launch.
 - Registry cleanup is a last resort and only removes broken uninstall entries.
-- The code logs detailed uninstall output to `%LOCALAPPDATA%\AppSweep\Logs` when `msiexec.exe` is used.
+- The code logs detailed uninstall output to `%LOCALAPPDATA%\\AppSweep\\Logs` when `msiexec.exe` is used.

@@ -17,6 +17,8 @@ public sealed class InstalledProduct : INotifyPropertyChanged
     public string SourceStatus { get; init; } = "Unknown";
     public string RegistryScope { get; init; } = string.Empty;
 
+    public string DetailsTooltip => $"Scope: {RegistryScope}{Environment.NewLine}Install source: {InstallSource}{Environment.NewLine}Cached package: {LocalPackage}";
+
     public bool IsSelected
     {
         get => _isSelected;
