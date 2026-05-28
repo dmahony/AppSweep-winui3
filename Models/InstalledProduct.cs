@@ -12,6 +12,10 @@ public sealed class InstalledProduct : INotifyPropertyChanged
     public string Version { get; init; } = string.Empty;
     public string InstallDate { get; init; } = "Unknown";
     public string UninstallString { get; init; } = string.Empty;
+    public string InstallSource { get; init; } = string.Empty;
+    public string LocalPackage { get; init; } = string.Empty;
+    public string SourceStatus { get; init; } = "Unknown";
+    public string RegistryScope { get; init; } = string.Empty;
 
     public bool IsSelected
     {

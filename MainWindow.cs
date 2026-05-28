@@ -13,14 +13,15 @@ public sealed class MainWindow : Window
 
     private readonly Grid _rootGrid;
     private readonly TextBox _searchBox;
+    private readonly ComboBox _methodComboBox;
     private readonly Button _refreshButton;
     private readonly Button _selectAllButton;
     private readonly Button _deselectAllButton;
+    private readonly Button _runButton;
+    private readonly Button _cleanupButton;
     private readonly ProgressRing _loadingRing;
     private readonly TextBlock _countText;
     private readonly ListView _productsListView;
-    private readonly Button _uninstallButton;
-    private readonly Button _forceRemoveButton;
     private readonly TextBlock _statusText;
     private readonly TextBox _logTextBox;
     private readonly Dictionary<string, CheckBox> _selectionBoxes = new(StringComparer.OrdinalIgnoreCase);
@@ -34,9 +35,19 @@ public sealed class MainWindow : Window
 
         _searchBox = new TextBox
         {
-            PlaceholderText = "Search by name, product code, version, or date"
+            PlaceholderText = "Search by name, product code, version, date, or source status"
         };
         _searchBox.TextChanged += SearchBox_TextChanged;
+
+        _methodComboBox = new ComboBox
+        {
+            Width = 260
+        };
+        _methodComboBox.Items.Add("Auto");
+        _methodComboBox.Items.Add("Windows Installer API");
+        _methodComboBox.Items.Add("msiexec.exe");
+        _methodComboBox.Items.Add("Orphaned Registry Cleanup");
+        _methodComboBox.SelectedIndex = 0;
 
         _refreshButton = new Button { Content = "Refresh List" };
         _refreshButton.Click += RefreshButton_Click;
@@ -46,6 +57,20 @@ public sealed class MainWindow : Window
 
         _deselectAllButton = new Button { Content = "Deselect All" };
         _deselectAllButton.Click += DeselectAllButton_Click;
+
+        _runButton = new Button
+        {
+            Content = "Run Selected Method",
+            IsEnabled = false
+        };
+        _runButton.Click += RunButton_Click;
+
+        _cleanupButton = new Button
+        {
+            Content = "Clean Orphaned Entries",
+            IsEnabled = false
+        };
+        _cleanupButton.Click += CleanupButton_Click;
 
         _loadingRing = new ProgressRing
         {
@@ -66,20 +91,6 @@ public sealed class MainWindow : Window
             SelectionMode = ListViewSelectionMode.None,
             IsItemClickEnabled = false
         };
-
-        _uninstallButton = new Button
-        {
-            Content = "Uninstall Selected",
-            IsEnabled = false
-        };
-        _uninstallButton.Click += UninstallButton_Click;
-
-        _forceRemoveButton = new Button
-        {
-            Content = "Force Remove Selected",
-            IsEnabled = false
-        };
-        _forceRemoveButton.Click += ForceRemoveButton_Click;
 
         _statusText = new TextBlock
         {
@@ -125,20 +136,23 @@ public sealed class MainWindow : Window
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var searchLabel = new TextBlock { Text = "Search:", VerticalAlignment = VerticalAlignment.Center };
         topRow.Children.Add(searchLabel);
         Grid.SetColumn(_searchBox, 1);
         topRow.Children.Add(_searchBox);
-        Grid.SetColumn(_refreshButton, 2);
+        Grid.SetColumn(_methodComboBox, 2);
+        topRow.Children.Add(_methodComboBox);
+        Grid.SetColumn(_refreshButton, 3);
         topRow.Children.Add(_refreshButton);
-        Grid.SetColumn(_selectAllButton, 3);
+        Grid.SetColumn(_selectAllButton, 4);
         topRow.Children.Add(_selectAllButton);
-        Grid.SetColumn(_deselectAllButton, 4);
+        Grid.SetColumn(_deselectAllButton, 5);
         topRow.Children.Add(_deselectAllButton);
-        Grid.SetColumn(_loadingRing, 5);
+        Grid.SetColumn(_loadingRing, 6);
         topRow.Children.Add(_loadingRing);
-        Grid.SetColumn(_countText, 6);
+        Grid.SetColumn(_countText, 7);
         topRow.Children.Add(_countText);
 
         var headerRow = new Grid { Margin = new Thickness(6, 0, 6, 0), ColumnSpacing = 12 };
@@ -147,6 +161,7 @@ public sealed class MainWindow : Window
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
         headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        headerRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) });
 
         var productCodeHeader = new TextBlock { Text = "Product Code", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         Grid.SetColumn(productCodeHeader, 1);
@@ -160,10 +175,13 @@ public sealed class MainWindow : Window
         var dateHeader = new TextBlock { Text = "Install Date", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
         Grid.SetColumn(dateHeader, 4);
         headerRow.Children.Add(dateHeader);
+        var sourceHeader = new TextBlock { Text = "Source Status", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold };
+        Grid.SetColumn(sourceHeader, 5);
+        headerRow.Children.Add(sourceHeader);
 
         var buttonsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 };
-        buttonsRow.Children.Add(_uninstallButton);
-        buttonsRow.Children.Add(_forceRemoveButton);
+        buttonsRow.Children.Add(_runButton);
+        buttonsRow.Children.Add(_cleanupButton);
         buttonsRow.Children.Add(_statusText);
 
         var logContainer = new Grid { RowSpacing = 8 };
@@ -222,14 +240,14 @@ public sealed class MainWindow : Window
         UpdateActionState();
     }
 
-    private async void UninstallButton_Click(object sender, RoutedEventArgs e)
+    private async void RunButton_Click(object sender, RoutedEventArgs e)
     {
-        await ProcessSelectedAsync(forceRemoval: false);
+        await ProcessSelectedAsync(GetSelectedMethod());
     }
 
-    private async void ForceRemoveButton_Click(object sender, RoutedEventArgs e)
+    private async void CleanupButton_Click(object sender, RoutedEventArgs e)
     {
-        await ProcessSelectedAsync(forceRemoval: true);
+        await ProcessSelectedAsync(RemovalMethod.OrphanedRegistryCleanup);
     }
 
     private async Task RefreshProductsAsync()
@@ -242,9 +260,7 @@ public sealed class MainWindow : Window
         try
         {
             SetBusy(true);
-            AppendLog("Retrieving list of installed products...");
-            AppendLog("Attempting registry method...");
-
+            AppendLog("Retrieving list of installed MSI products...");
             var products = await Task.Run(() => _service.GetInstalledProducts());
 
             foreach (var existing in AllProducts)
@@ -275,26 +291,31 @@ public sealed class MainWindow : Window
         }
     }
 
-    private async Task ProcessSelectedAsync(bool forceRemoval)
+    private async Task ProcessSelectedAsync(RemovalMethod method)
     {
         var selected = AllProducts.Where(product => product.IsSelected).ToList();
         if (selected.Count == 0)
         {
-            await ShowMessageAsync("No Selection", forceRemoval
-                ? "Please select products to force remove."
-                : "Please select products to uninstall.");
+            await ShowMessageAsync("No Selection", method == RemovalMethod.OrphanedRegistryCleanup
+                ? "Please select products to clean up."
+                : "Please select products to remove.");
             return;
         }
 
         var summary = string.Join(Environment.NewLine + Environment.NewLine,
-            selected.Select(product => $"{product.Name} (v{product.Version})\n{product.ProductCode}"));
+            selected.Select(product =>
+                $"{product.Name} (v{product.Version})\n{product.ProductCode}\n{product.SourceStatus}"));
 
-        var warningText = forceRemoval
-            ? "WARNING: Force removal directly modifies the registry and can leave remnants on the system."
-            : "Are you sure you want to uninstall the selected products?";
+        var warningText = method switch
+        {
+            RemovalMethod.WindowsInstallerApi => "This uses the Windows Installer API to uninstall the selected products.",
+            RemovalMethod.MsiExec => "This calls msiexec.exe directly to uninstall the selected products.",
+            RemovalMethod.OrphanedRegistryCleanup => "WARNING: This only removes broken uninstall entries from the registry.",
+            _ => "This will try Windows Installer API removal, then msiexec.exe, then registry cleanup if needed."
+        };
 
         var confirmed = await ShowConfirmationAsync(
-            forceRemoval ? "Confirm Force Removal" : "Confirm Uninstall",
+            method == RemovalMethod.OrphanedRegistryCleanup ? "Confirm Registry Cleanup" : "Confirm Removal",
             $"{warningText}\n\n{summary}");
 
         if (!confirmed)
@@ -308,17 +329,17 @@ public sealed class MainWindow : Window
             foreach (var product in selected)
             {
                 AppendLog($"Processing: {product.Name} (v{product.Version})");
-                await _service.UninstallProductAsync(
-                    product.ProductCode,
-                    forceRemoval,
+                await _service.RemoveProductAsync(
+                    product,
+                    method,
                     AppendLog,
                     CancellationToken.None);
-                await Task.Delay(500);
+                await Task.Delay(250);
             }
 
-            AppendLog(forceRemoval
-                ? "Batch force removal completed. Use Refresh List to update the display."
-                : "Batch uninstall completed. Use Refresh List to update the display.");
+            AppendLog(method == RemovalMethod.OrphanedRegistryCleanup
+                ? "Registry cleanup completed. Refresh the list to update the display."
+                : "Removal pass completed. Refresh the list to update the display.");
         }
         finally
         {
@@ -336,7 +357,8 @@ public sealed class MainWindow : Window
                 product.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 product.ProductCode.Contains(term, StringComparison.OrdinalIgnoreCase) ||
                 product.Version.Contains(term, StringComparison.OrdinalIgnoreCase) ||
-                product.InstallDate.Contains(term, StringComparison.OrdinalIgnoreCase)));
+                product.InstallDate.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                product.SourceStatus.Contains(term, StringComparison.OrdinalIgnoreCase)));
 
         FilteredProducts.Clear();
         _productsListView.Items.Clear();
@@ -364,39 +386,49 @@ public sealed class MainWindow : Window
         checkBox.Unchecked += (_, _) => product.IsSelected = false;
         _selectionBoxes[product.ProductCode] = checkBox;
 
-        var row = new Grid
+        var rowGrid = new Grid
         {
             Padding = new Thickness(6, 6, 6, 6),
-            ColumnSpacing = 12,
-            BorderBrush = Application.Current.Resources["SystemControlForegroundBaseLowBrush"] as Brush,
-            BorderThickness = new Thickness(0, 0, 0, 1)
+            ColumnSpacing = 12
         };
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.5, GridUnitType.Star) });
 
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.2, GridUnitType.Star) });
-
-        row.Children.Add(checkBox);
+        rowGrid.Children.Add(checkBox);
 
         var productCodeText = new TextBlock { Text = product.ProductCode, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(productCodeText, 1);
-        row.Children.Add(productCodeText);
+        rowGrid.Children.Add(productCodeText);
 
         var nameText = new TextBlock { Text = product.Name, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(nameText, 2);
-        row.Children.Add(nameText);
+        rowGrid.Children.Add(nameText);
 
         var versionText = new TextBlock { Text = product.Version, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(versionText, 3);
-        row.Children.Add(versionText);
+        rowGrid.Children.Add(versionText);
 
         var installDateText = new TextBlock { Text = product.InstallDate, TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetColumn(installDateText, 4);
-        row.Children.Add(installDateText);
+        rowGrid.Children.Add(installDateText);
 
-        return new Border { Child = row };
+        var sourceStatusText = new TextBlock { Text = product.SourceStatus, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(sourceStatusText, 5);
+        rowGrid.Children.Add(sourceStatusText);
+
+        var border = new Border
+        {
+            Child = rowGrid,
+            BorderBrush = Application.Current.Resources["SystemControlForegroundBaseLowBrush"] as Brush,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            ToolTip = $"Scope: {product.RegistryScope}\nInstall source: {product.InstallSource}\nCached package: {product.LocalPackage}"
+        };
+
+        return border;
     }
 
     private void Product_PropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -415,8 +447,8 @@ public sealed class MainWindow : Window
     private void UpdateActionState()
     {
         var hasCheckedItems = AllProducts.Any(product => product.IsSelected);
-        _uninstallButton.IsEnabled = hasCheckedItems && !_isLoading;
-        _forceRemoveButton.IsEnabled = hasCheckedItems && !_isLoading;
+        _runButton.IsEnabled = hasCheckedItems && !_isLoading;
+        _cleanupButton.IsEnabled = hasCheckedItems && !_isLoading;
     }
 
     private void SetBusy(bool isBusy)
@@ -427,30 +459,39 @@ public sealed class MainWindow : Window
         _selectAllButton.IsEnabled = !isBusy;
         _deselectAllButton.IsEnabled = !isBusy;
         _searchBox.IsEnabled = !isBusy;
+        _methodComboBox.IsEnabled = !isBusy;
         UpdateActionState();
     }
 
     private void AppendLog(string message)
     {
-        var line = $"{DateTime.Now:HH:mm:ss}: {message}{Environment.NewLine}";
-
-        if (DispatcherQueue.HasThreadAccess)
-        {
-            _logTextBox.Text += line;
-            _logTextBox.SelectionStart = _logTextBox.Text.Length;
-            _logTextBox.SelectionLength = 0;
-        }
-        else
+        if (!DispatcherQueue.HasThreadAccess)
         {
             _ = DispatcherQueue.TryEnqueue(() => AppendLog(message));
+            return;
         }
 
+        var line = $"{DateTime.Now:HH:mm:ss}: {message}{Environment.NewLine}";
+        _logTextBox.Text += line;
+        _logTextBox.SelectionStart = _logTextBox.Text.Length;
+        _logTextBox.SelectionLength = 0;
         SetStatus(message);
     }
 
     private void SetStatus(string message)
     {
         _statusText.Text = message;
+    }
+
+    private RemovalMethod GetSelectedMethod()
+    {
+        return _methodComboBox.SelectedItem switch
+        {
+            string text when text.Contains("Windows Installer API", StringComparison.OrdinalIgnoreCase) => RemovalMethod.WindowsInstallerApi,
+            string text when text.Contains("msiexec", StringComparison.OrdinalIgnoreCase) => RemovalMethod.MsiExec,
+            string text when text.Contains("Orphaned", StringComparison.OrdinalIgnoreCase) => RemovalMethod.OrphanedRegistryCleanup,
+            _ => RemovalMethod.Auto
+        };
     }
 
     private async Task<bool> ShowConfirmationAsync(string title, string content)

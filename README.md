@@ -1,26 +1,33 @@
 # AppSweep WinUI 3
 
-A WinUI 3 rewrite of the original AppSweep.exe GUI.
+A Windows desktop app for removing MSI-based applications when the original installer source is missing.
 
 ## What it does
 
 - Enumerates installed MSI products from the registry
-- Lets you search by name, product code, version, or install date
-- Supports selecting multiple products
-- Runs standard MSI uninstall via `msiexec.exe`
-- Supports force removal by deleting installer registry keys
+- Shows product code, version, install date, and source status
+- Lets you search by name, product code, version, date, or source state
+- Supports multi-select removal
+- Supports multiple removal methods:
+  - Windows Installer API
+  - `msiexec.exe`
+  - Orphaned uninstall-entry cleanup
+  - Auto mode that tries the safe uninstall paths first
 - Writes activity into an in-app log
 
 ## Build
 
-This repo is intended to be built on GitHub Actions on Windows.
+This project targets Windows and requires .NET 8 + WinUI 3 / Windows App SDK.
 
-Workflow:
-- `.github/workflows/build.yml`
+Typical build command on Windows:
 
-Artifacts are published from the workflow as a downloadable build output.
+```powershell
+dotnet restore AppSweep.WinUI3.csproj
+dotnet build AppSweep.WinUI3.csproj -c Release
+```
 
 ## Notes
 
 - The app requests administrator privileges at launch.
-- Force removal is registry cleanup only; it does not remove files or services.
+- Registry cleanup is a last resort and only removes broken uninstall entries.
+- The code logs detailed uninstall output to `%LOCALAPPDATA%\AppSweep\Logs` when `msiexec.exe` is used.

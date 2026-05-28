@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 
 namespace AppSweep;
@@ -8,54 +9,74 @@ public sealed class InstalledProductService
 {
     private static readonly Regex GuidRegex = new(@"^\{[0-9A-Fa-f-]+\}$", RegexOptions.Compiled);
     private static readonly Regex GuidInTextRegex = new(@"\{[0-9A-Fa-f-]+\}", RegexOptions.Compiled);
+    private static readonly string[] UninstallRoots =
+    {
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+        @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+    };
 
     public IReadOnlyList<InstalledProduct> GetInstalledProducts()
     {
         var products = new Dictionary<string, InstalledProduct>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+        foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
         {
-            try
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
-                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
-                using var uninstallRoot = baseKey.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall");
-                if (uninstallRoot is null)
+                try
                 {
-                    continue;
-                }
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    foreach (var rootPath in UninstallRoots)
+                    {
+                        using var uninstallRoot = baseKey.OpenSubKey(rootPath);
+                        if (uninstallRoot is null)
+                        {
+                            continue;
+                        }
 
-                foreach (var subKeyName in uninstallRoot.GetSubKeyNames())
+                        foreach (var subKeyName in uninstallRoot.GetSubKeyNames())
+                        {
+                            using var subKey = uninstallRoot.OpenSubKey(subKeyName);
+                            if (subKey is null)
+                            {
+                                continue;
+                            }
+
+                            var productCode = NormalizeProductCode(subKeyName, subKey.GetValue("UninstallString")?.ToString());
+                            var displayName = subKey.GetValue("DisplayName")?.ToString()?.Trim();
+                            var uninstallString = subKey.GetValue("UninstallString")?.ToString() ?? string.Empty;
+                            var isInstallerEntry = ReadRegistryInt(subKey, "WindowsInstaller") == 1 ||
+                                                   uninstallString.Contains("msiexec", StringComparison.OrdinalIgnoreCase);
+
+                            if (!isInstallerEntry || string.IsNullOrWhiteSpace(productCode) || string.IsNullOrWhiteSpace(displayName))
+                            {
+                                continue;
+                            }
+
+                            var installSource = subKey.GetValue("InstallSource")?.ToString()?.Trim() ?? string.Empty;
+                            var localPackage = subKey.GetValue("LocalPackage")?.ToString()?.Trim() ?? string.Empty;
+                            var sourceStatus = DetermineSourceStatus(localPackage, installSource);
+                            var registryScope = $"{hive}\{view}";
+
+                            products[productCode] = new InstalledProduct
+                            {
+                                ProductCode = productCode,
+                                Name = displayName,
+                                Version = subKey.GetValue("DisplayVersion")?.ToString()?.Trim() ?? "Unknown",
+                                InstallDate = FormatInstallDate(subKey.GetValue("InstallDate")?.ToString()),
+                                UninstallString = uninstallString,
+                                InstallSource = installSource,
+                                LocalPackage = localPackage,
+                                SourceStatus = sourceStatus,
+                                RegistryScope = registryScope
+                            };
+                        }
+                    }
+                }
+                catch
                 {
-                    using var subKey = uninstallRoot.OpenSubKey(subKeyName);
-                    if (subKey is null)
-                    {
-                        continue;
-                    }
-
-                    var productCode = NormalizeProductCode(subKeyName, subKey.GetValue("UninstallString")?.ToString());
-                    var displayName = subKey.GetValue("DisplayName")?.ToString()?.Trim();
-                    var uninstallString = subKey.GetValue("UninstallString")?.ToString() ?? string.Empty;
-                    var isInstallerEntry = ReadRegistryInt(subKey, "WindowsInstaller") == 1 ||
-                                           uninstallString.Contains("msiexec", StringComparison.OrdinalIgnoreCase);
-
-                    if (!isInstallerEntry || string.IsNullOrWhiteSpace(productCode) || string.IsNullOrWhiteSpace(displayName))
-                    {
-                        continue;
-                    }
-
-                    products[productCode] = new InstalledProduct
-                    {
-                        ProductCode = productCode,
-                        Name = displayName,
-                        Version = subKey.GetValue("DisplayVersion")?.ToString()?.Trim() ?? "Unknown",
-                        InstallDate = FormatInstallDate(subKey.GetValue("InstallDate")?.ToString()),
-                        UninstallString = uninstallString
-                    };
+                    // Keep other registry views/hives if one path is inaccessible.
                 }
-            }
-            catch
-            {
-                // Ignore one registry view and keep the other view's results.
             }
         }
 
@@ -65,36 +86,107 @@ public sealed class InstalledProductService
             .ToArray();
     }
 
-    public async Task<bool> UninstallProductAsync(
-        string productCode,
-        bool forceRemoval,
+    public async Task<bool> RemoveProductAsync(
+        InstalledProduct product,
+        RemovalMethod method,
         Action<string> log,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(productCode) || productCode == "(Unknown)")
+        if (product is null)
         {
-            log("Cannot uninstall a product without a valid product code.");
+            log("No product was selected.");
             return false;
         }
 
-        log($"Attempting to uninstall product with code: {productCode}");
-
-        if (forceRemoval)
+        if (string.IsNullOrWhiteSpace(product.ProductCode) || product.ProductCode == "(Unknown)")
         {
-            return ForceRemoveProduct(productCode, log);
+            log($"Cannot remove '{product.Name}' because it does not have a valid product code.");
+            return false;
         }
 
-        var psi = new ProcessStartInfo
+        log($"Target: {product.Name} | {product.ProductCode} | Source: {product.SourceStatus}");
+
+        return method switch
         {
-            FileName = "msiexec.exe",
-            Arguments = $"/x {productCode} /qn /norestart",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            WindowStyle = ProcessWindowStyle.Hidden
+            RemovalMethod.WindowsInstallerApi => TryWindowsInstallerApi(product, log),
+            RemovalMethod.MsiExec => await TryMsiexecAsync(product, log, cancellationToken).ConfigureAwait(false),
+            RemovalMethod.OrphanedRegistryCleanup => TryRemoveRegistryEntries(product, log),
+            RemovalMethod.Auto => await TryAutoRemovalAsync(product, log, cancellationToken).ConfigureAwait(false),
+            _ => false
         };
+    }
+
+    private async Task<bool> TryAutoRemovalAsync(
+        InstalledProduct product,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log("Auto removal order: Windows Installer API → msiexec → orphaned entry cleanup.");
+
+        if (TryWindowsInstallerApi(product, log))
+        {
+            return true;
+        }
+
+        if (await TryMsiexecAsync(product, log, cancellationToken).ConfigureAwait(false))
+        {
+            return true;
+        }
+
+        log("Trying orphaned entry cleanup because the uninstall path could not complete.");
+        return TryRemoveRegistryEntries(product, log);
+    }
+
+    private static bool TryWindowsInstallerApi(InstalledProduct product, Action<string> log)
+    {
+        log("Trying Windows Installer API uninstall...");
 
         try
         {
+            var result = MsiConfigureProductEx(product.ProductCode, 0, InstallState.Absent, "REBOOT=ReallySuppress");
+            if (result == 0 || result == 3010 || result == 1641)
+            {
+                log(result == 0
+                    ? "Windows Installer API uninstall completed successfully."
+                    : $"Windows Installer API uninstall completed with reboot-related code {result}.");
+                return true;
+            }
+
+            log($"Windows Installer API uninstall failed with code {result}.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            log($"Windows Installer API uninstall threw an exception: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static async Task<bool> TryMsiexecAsync(
+        InstalledProduct product,
+        Action<string> log,
+        CancellationToken cancellationToken)
+    {
+        log("Trying msiexec.exe uninstall...");
+
+        try
+        {
+            var logDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "AppSweep",
+                "Logs");
+            Directory.CreateDirectory(logDirectory);
+
+            var logFile = Path.Combine(logDirectory, $"msiexec-{SanitizeFileName(product.ProductCode)}-{DateTime.Now:yyyyMMdd-HHmmss}.log");
+            var psi = new ProcessStartInfo
+            {
+                FileName = "msiexec.exe",
+                Arguments = $"/x {product.ProductCode} /qn /norestart /l*v \"{logFile}\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+
             using var process = Process.Start(psi);
             if (process is null)
             {
@@ -104,65 +196,79 @@ public sealed class InstalledProductService
 
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
-            if (process.ExitCode == 0)
+            if (process.ExitCode is 0 or 3010 or 1641)
             {
-                log("Product successfully uninstalled.");
+                log(process.ExitCode == 0
+                    ? $"msiexec uninstall completed successfully. Log: {logFile}"
+                    : $"msiexec uninstall completed with reboot-related code {process.ExitCode}. Log: {logFile}");
                 return true;
             }
 
-            log($"Uninstall failed with exit code: {process.ExitCode}");
-            log("Try using Force Remove for this product.");
+            log($"msiexec uninstall failed with exit code {process.ExitCode}. Log: {logFile}");
             return false;
         }
         catch (Exception ex)
         {
-            log($"Error removing product: {ex.Message}");
+            log($"msiexec uninstall threw an exception: {ex.Message}");
             return false;
         }
     }
 
-    private static bool ForceRemoveProduct(string productCode, Action<string> log)
+    private static bool TryRemoveRegistryEntries(InstalledProduct product, Action<string> log)
     {
-        log("Using force removal method...");
+        log("Trying orphaned registry entry cleanup...");
 
-        var uninstallPaths = new[]
+        var removedAny = false;
+        foreach (var hive in new[] { RegistryHive.LocalMachine, RegistryHive.CurrentUser })
         {
-            $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{productCode}",
-            $@"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{productCode}"
-        };
-
-        var removed = false;
-        foreach (var path in uninstallPaths)
-        {
-            try
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
-                using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-                var parentPath = Path.GetDirectoryName(path.Replace('/', '\\')) ?? string.Empty;
-                using var uninstallRoot = baseKey.OpenSubKey(parentPath, writable: true);
-                if (uninstallRoot is null)
+                try
                 {
-                    continue;
-                }
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    foreach (var rootPath in UninstallRoots)
+                    {
+                        using var uninstallRoot = baseKey.OpenSubKey(rootPath, writable: true);
+                        if (uninstallRoot is null)
+                        {
+                            continue;
+                        }
 
-                var keyName = Path.GetFileName(path);
-                uninstallRoot.DeleteSubKeyTree(keyName, throwOnMissingSubKey: false);
-                log($"Removed registry key: HKLM\\{path}");
-                removed = true;
-            }
-            catch (Exception ex)
-            {
-                log($"Failed to remove registry key HKLM\\{path}: {ex.Message}");
+                        if (TryDeleteSubKey(uninstallRoot, product.ProductCode))
+                        {
+                            removedAny = true;
+                            log($"Removed registry entry: {hive}\{view}\{rootPath}\{product.ProductCode}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log($"Registry cleanup failed for {hive}\{view}: {ex.Message}");
+                }
             }
         }
 
-        if (removed)
+        if (!removedAny)
         {
-            log("Force removal completed. You may need to restart your computer.");
+            log("No uninstall registry entries were removed.");
+            return false;
+        }
+
+        log("Registry cleanup completed. Refresh the list to confirm the entry is gone.");
+        return true;
+    }
+
+    private static bool TryDeleteSubKey(RegistryKey parentKey, string subKeyName)
+    {
+        try
+        {
+            parentKey.DeleteSubKeyTree(subKeyName);
             return true;
         }
-
-        log("No registry keys were removed.");
-        return false;
+        catch
+        {
+            return false;
+        }
     }
 
     private static string NormalizeProductCode(string subKeyName, string? uninstallString)
@@ -192,14 +298,50 @@ public sealed class InstalledProductService
         return installDate;
     }
 
-    private static int? ReadRegistryInt(RegistryKey key, string name)
+    private static string DetermineSourceStatus(string localPackage, string installSource)
+    {
+        if (!string.IsNullOrWhiteSpace(localPackage) && File.Exists(localPackage))
+        {
+            return "Cached package available";
+        }
+
+        if (!string.IsNullOrWhiteSpace(installSource) &&
+            (Directory.Exists(installSource) || File.Exists(installSource)))
+        {
+            return "Source path available";
+        }
+
+        if (!string.IsNullOrWhiteSpace(localPackage) || !string.IsNullOrWhiteSpace(installSource))
+        {
+            return "Source missing";
+        }
+
+        return "Unknown";
+    }
+
+    private static int ReadRegistryInt(RegistryKey key, string name)
     {
         var value = key.GetValue(name);
         return value switch
         {
             int i => i,
             string s when int.TryParse(s, out var parsed) => parsed,
-            _ => null
+            _ => 0
         };
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var chars = value.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray();
+        return new string(chars);
+    }
+
+    [DllImport("msi.dll", CharSet = CharSet.Unicode)]
+    private static extern uint MsiConfigureProductEx(string szProduct, int iInstallLevel, InstallState eInstallState, string? szCommandLine);
+
+    private enum InstallState : int
+    {
+        Absent = 2
     }
 }
