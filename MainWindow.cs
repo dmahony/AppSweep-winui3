@@ -424,9 +424,9 @@ public sealed class MainWindow : Window
         {
             Child = rowGrid,
             BorderBrush = Application.Current.Resources["SystemControlForegroundBaseLowBrush"] as Brush,
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            ToolTip = $"Scope: {product.RegistryScope}\nInstall source: {product.InstallSource}\nCached package: {product.LocalPackage}"
+            BorderThickness = new Thickness(0, 0, 0, 1)
         };
+        ToolTipService.SetToolTip(border, $"Scope: {product.RegistryScope}\nInstall source: {product.InstallSource}\nCached package: {product.LocalPackage}");
 
         return border;
     }
