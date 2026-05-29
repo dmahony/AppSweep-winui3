@@ -22,16 +22,19 @@ public partial class App : Application
         try
         {
             StartupDiagnostics.HookGlobalHandlers();
+            StartupDiagnostics.AttachConsoleIfAvailable();
             StartupDiagnostics.Log("App startup");
 
             var options = CommandLineOptions.Parse(e.Args);
+            var cliMode = options.HasHelp || options.HasExport || options.HasRemove;
+            if (cliMode)
+            {
+                StartupDiagnostics.EnsureConsoleForCli();
+            }
+
             if (options.HasHelp)
             {
-                MessageBox.Show(
-                    GetHelpText(),
-                    "AppSweep help",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                StartupDiagnostics.WriteStdOut(GetHelpText());
                 Shutdown(0);
                 return;
             }
@@ -39,6 +42,11 @@ public partial class App : Application
             if (options.HasExport)
             {
                 var exported = await ExportProductsAsync(options.ExportPath).ConfigureAwait(true);
+                if (!exported)
+                {
+                    StartupDiagnostics.WriteStdErr("AppSweep export completed with errors.");
+                }
+
                 Shutdown(exported ? 0 : 1);
                 return;
             }
@@ -47,16 +55,17 @@ public partial class App : Application
             {
                 if (string.IsNullOrWhiteSpace(options.RemovePattern))
                 {
-                    MessageBox.Show(
-                        "AppSweep --remove requires a program name or wildcard pattern.",
-                        "AppSweep command-line error",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    StartupDiagnostics.WriteStdErr("AppSweep --remove requires a program name or wildcard pattern.");
                     Shutdown(-1);
                     return;
                 }
 
                 var removed = await RemoveProductsAsync(options.RemovePattern).ConfigureAwait(true);
+                if (!removed)
+                {
+                    StartupDiagnostics.WriteStdErr($"No installed products matched '{options.RemovePattern}' or removal failed.");
+                }
+
                 Shutdown(removed ? 0 : 1);
                 return;
             }
@@ -71,11 +80,19 @@ public partial class App : Application
         catch (Exception ex)
         {
             StartupDiagnostics.LogException("App startup failure", ex);
-            MessageBox.Show(
-                $"AppSweep failed to start.\n\n{ex}",
-                "AppSweep startup error",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            if (StartupDiagnostics.ConsoleAttached)
+            {
+                StartupDiagnostics.WriteStdErr($"AppSweep failed to start.\n\n{ex}");
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"AppSweep failed to start.\n\n{ex}",
+                    "AppSweep startup error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+
             Shutdown(-1);
         }
     }
