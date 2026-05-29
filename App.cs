@@ -24,11 +24,29 @@ public partial class App : Application
             StartupDiagnostics.HookGlobalHandlers();
             StartupDiagnostics.Log("App startup");
 
-            var exportRequest = ParseExportRequest(e.Args);
-            if (exportRequest is not null)
+            var options = CommandLineOptions.Parse(e.Args);
+            if (options.HasExport)
             {
-                await ExportProductsAsync(exportRequest).ConfigureAwait(true);
-                Shutdown(0);
+                var exported = await ExportProductsAsync(options.ExportPath).ConfigureAwait(true);
+                Shutdown(exported ? 0 : 1);
+                return;
+            }
+
+            if (options.HasRemove)
+            {
+                if (string.IsNullOrWhiteSpace(options.RemovePattern))
+                {
+                    MessageBox.Show(
+                        "AppSweep --remove requires a program name or wildcard pattern, such as --remove Adobe*.",
+                        "AppSweep command-line error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                    Shutdown(-1);
+                    return;
+                }
+
+                var removed = await RemoveProductsAsync(options.RemovePattern).ConfigureAwait(true);
+                Shutdown(removed ? 0 : 1);
                 return;
             }
 
@@ -51,44 +69,46 @@ public partial class App : Application
         }
     }
 
-    private static ExportRequest? ParseExportRequest(IEnumerable<string> args)
-    {
-        var values = args.ToArray();
-        for (var i = 0; i < values.Length; i++)
-        {
-            var current = values[i];
-            if (!current.StartsWith("--export", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var outputPath = string.Empty;
-            var equalsIndex = current.IndexOf('=');
-            if (equalsIndex >= 0)
-            {
-                outputPath = current[(equalsIndex + 1)..].Trim();
-            }
-            else if (i + 1 < values.Length && !values[i + 1].StartsWith("-", StringComparison.Ordinal))
-            {
-                outputPath = values[i + 1].Trim();
-            }
-
-            return new ExportRequest(string.IsNullOrWhiteSpace(outputPath) ? null : outputPath);
-        }
-
-        return null;
-    }
-
-    private async Task ExportProductsAsync(ExportRequest request)
+    private async Task<bool> ExportProductsAsync(string? requestedPath)
     {
         var service = new InstalledProductService();
         StartupDiagnostics.Log("Export mode requested; loading installed products...");
         var products = await Task.Run(() => service.GetInstalledProducts()).ConfigureAwait(true);
-        var exportPath = ResolveExportPath(request.OutputPath);
+        var exportPath = ResolveExportPath(requestedPath);
 
         StartupDiagnostics.Log($"Exporting {products.Count} products to {exportPath}");
         CsvExportService.Export(products, exportPath);
         StartupDiagnostics.Log($"Export complete: {exportPath}");
+        return true;
+    }
+
+    private async Task<bool> RemoveProductsAsync(string pattern)
+    {
+        var service = new InstalledProductService();
+        StartupDiagnostics.Log($"Remove mode requested for pattern: {pattern}");
+        var products = await Task.Run(() => service.GetInstalledProducts()).ConfigureAwait(true);
+        var matches = products.Where(product => ProductMatcher.Matches(pattern, product.Name)).ToArray();
+
+        if (matches.Length == 0)
+        {
+            StartupDiagnostics.Log($"No installed products matched '{pattern}'.");
+            return false;
+        }
+
+        StartupDiagnostics.Log($"Matched {matches.Length} installed product(s) for '{pattern}'.");
+
+        var allSucceeded = true;
+        foreach (var product in matches)
+        {
+            StartupDiagnostics.Log($"Removing {product.Name} ({product.ProductCode})...");
+            var removed = await service.RemoveProductAsync(product, RemovalMethod.Auto, StartupDiagnostics.Log, CancellationToken.None).ConfigureAwait(true);
+            allSucceeded &= removed;
+        }
+
+        StartupDiagnostics.Log(allSucceeded
+            ? "Removal command completed successfully."
+            : "Removal command completed with one or more failures.");
+        return allSucceeded;
     }
 
     private static string ResolveExportPath(string? requestedPath)
@@ -102,6 +122,4 @@ public partial class App : Application
 
         return Path.GetFullPath(requestedPath);
     }
-
-    private sealed record ExportRequest(string? OutputPath);
 }

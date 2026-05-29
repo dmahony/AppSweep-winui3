@@ -12,7 +12,13 @@
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <WindowsPackageType>None</WindowsPackageType>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="AppSweep.Tests/**/*.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Assets/app.ico" />
