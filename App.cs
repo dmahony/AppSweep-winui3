@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 
 namespace AppSweep;
@@ -25,13 +24,6 @@ public partial class App : Application
             StartupDiagnostics.Log("App startup");
 
             var options = CommandLineOptions.Parse(e.Args);
-            if (options.HasExport)
-            {
-                var exported = await ExportProductsAsync(options.ExportPath).ConfigureAwait(true);
-                Shutdown(exported ? 0 : 1);
-                return;
-            }
-
             if (options.HasRemove)
             {
                 if (string.IsNullOrWhiteSpace(options.RemovePattern))
@@ -69,19 +61,6 @@ public partial class App : Application
         }
     }
 
-    private async Task<bool> ExportProductsAsync(string? requestedPath)
-    {
-        var service = new InstalledProductService();
-        StartupDiagnostics.Log("Export mode requested; loading installed products...");
-        var products = await Task.Run(() => service.GetInstalledProducts()).ConfigureAwait(true);
-        var exportPath = ResolveExportPath(requestedPath);
-
-        StartupDiagnostics.Log($"Exporting {products.Count} products to {exportPath}");
-        CsvExportService.Export(products, exportPath);
-        StartupDiagnostics.Log($"Export complete: {exportPath}");
-        return true;
-    }
-
     private async Task<bool> RemoveProductsAsync(string pattern)
     {
         var service = new InstalledProductService();
@@ -109,17 +88,5 @@ public partial class App : Application
             ? "Removal command completed successfully."
             : "Removal command completed with one or more failures.");
         return allSucceeded;
-    }
-
-    private static string ResolveExportPath(string? requestedPath)
-    {
-        if (string.IsNullOrWhiteSpace(requestedPath))
-        {
-            return Path.Combine(
-                Environment.CurrentDirectory,
-                $"AppSweep-export-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
-        }
-
-        return Path.GetFullPath(requestedPath);
     }
 }
