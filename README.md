@@ -14,6 +14,8 @@ A Windows desktop app for removing MSI-based applications when the original inst
   - Orphaned uninstall-entry cleanup
   - Auto mode that tries the safe uninstall paths first
 - Writes activity into an in-app log
+- Supports `--help` to show command-line usage
+- Supports `--export` to write the listed MSI products and their details to a CSV file
 - Supports `--remove <pattern>` to remove matching listed programs
 - Runs as a standard WPF desktop app
 

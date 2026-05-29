@@ -25,6 +25,17 @@ public partial class App : Application
             StartupDiagnostics.Log("App startup");
 
             var options = CommandLineOptions.Parse(e.Args);
+            if (options.HasHelp)
+            {
+                MessageBox.Show(
+                    GetHelpText(),
+                    "AppSweep help",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                Shutdown(0);
+                return;
+            }
+
             if (options.HasExport)
             {
                 var exported = await ExportProductsAsync(options.ExportPath).ConfigureAwait(true);
@@ -122,4 +133,14 @@ public partial class App : Application
 
         return Path.GetFullPath(requestedPath);
     }
+
+    private static string GetHelpText() =>
+        "AppSweep command-line options:\n\n" +
+        "  --help            Show this help text\n" +
+        "  --export <path>   Export installed products to CSV\n" +
+        "  --remove <name>   Remove installed products matching a name or wildcard pattern\n\n" +
+        "Examples:\n" +
+        "  AppSweep.exe --help\n" +
+        "  AppSweep.exe --export out.csv\n" +
+        "  AppSweep.exe --remove Adobe*";
 }
