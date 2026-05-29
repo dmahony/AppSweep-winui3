@@ -1,7 +1,8 @@
 namespace AppSweep;
 
-public sealed record CommandLineOptions(bool RemoveRequested, string? RemovePattern)
+public sealed record CommandLineOptions(bool ExportRequested, string? ExportPath, bool RemoveRequested, string? RemovePattern)
 {
+    public bool HasExport => ExportRequested;
     public bool HasRemove => RemoveRequested;
 
     public static CommandLineOptions Parse(IEnumerable<string> args)
@@ -11,13 +12,18 @@ public sealed record CommandLineOptions(bool RemoveRequested, string? RemovePatt
         {
             var current = values[i];
 
+            if (TryParseValue(current, "--export", values, ref i, out var exportPath))
+            {
+                return new CommandLineOptions(true, exportPath, false, null);
+            }
+
             if (TryParseValue(current, "--remove", values, ref i, out var removePattern))
             {
-                return new CommandLineOptions(true, removePattern);
+                return new CommandLineOptions(false, null, true, removePattern);
             }
         }
 
-        return new CommandLineOptions(false, null);
+        return new CommandLineOptions(false, null, false, null);
     }
 
     private static bool TryParseValue(string current, string flagName, IReadOnlyList<string> values, ref int index, out string? value)

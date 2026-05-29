@@ -6,6 +6,10 @@ static class Program
     {
         var failures = new List<string>();
 
+        var exportRequest = CommandLineOptions.Parse(new[] { "--export", "out.csv" });
+        AssertTrue(exportRequest.HasExport, "--export should be detected", failures);
+        AssertEqual("out.csv", exportRequest.ExportPath, "--export should accept the next argument as the path", failures);
+
         var removeRequest = CommandLineOptions.Parse(new[] { "--remove", "Adobe*" });
         AssertTrue(removeRequest.RemoveRequested, "--remove should be detected", failures);
         AssertEqual("Adobe*", removeRequest.RemovePattern, "--remove should accept the next argument as the pattern", failures);
